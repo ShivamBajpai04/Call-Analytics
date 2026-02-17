@@ -1,0 +1,86 @@
+name: "ClusterDiarizer"
+
+num_workers: 0
+sample_rate: 16000
+batch_size: 4                                         # Reduced from 64 for low-RAM systems (<=4GB)
+device: cpu                                           # Changed from cuda to cpu for machines without GPU
+verbose: True
+
+diarizer:
+  manifest_filepath: .temp/manifest.json
+  out_dir: .temp
+  oracle_vad: False
+  collar: 0.25
+  ignore_overlap: True
+
+  vad:
+    model_path: vad_multilingual_marblenet
+    external_vad_manifest: null
+    parameters:
+      window_length_in_sec: 0.15
+      shift_length_in_sec: 0.01
+      smoothing: "median"
+      overlap: 0.5
+      onset: 0.1
+      offset: 0.1
+      pad_onset: 0.1
+      pad_offset: 0
+      min_duration_on: 0
+      min_duration_off: 0.2
+      filter_speech_first: True
+
+  speaker_embeddings:
+    model_path: titanet_small                         # Changed from titanet_large (~900MB) to titanet_small (~80MB)
+    parameters:
+      window_length_in_sec: [ 1.5,1.25,1.0,0.75,0.5 ]
+      shift_length_in_sec: [ 0.75,0.625,0.5,0.375,0.25 ]
+      multiscale_weights: [ 1,1,1,1,1 ]
+      save_embeddings: True
+
+  clustering:
+    parameters:
+      oracle_num_speakers: False
+      max_num_speakers: 4                             # Reduced from 8 (telephonic calls typically have 2-4 speakers)
+      enhanced_count_thres: 80
+      max_rp_threshold: 0.25
+      sparse_search_volume: 30
+      maj_vote_spk_count: False
+      chunk_cluster_count: 50
+      embeddings_per_chunk: 2000                      # Reduced from 10000 to save memory
+
+  msdd_model:
+    model_path: diar_msdd_telephonic
+    parameters:
+      use_speaker_model_from_ckpt: True
+      infer_batch_size: 4                             # Reduced from 25 for low-RAM systems
+      sigmoid_threshold: [ 0.7 ]
+      seq_eval_mode: False
+      split_infer: True
+      diar_window_length: 50
+      overlap_infer_spk_limit: 3                      # Reduced from 5 to save memory
+
+  asr:
+    model_path: stt_en_conformer_ctc_small            # Changed from stt_en_conformer_ctc_large (~500MB) to small (~130MB)
+    parameters:
+      asr_based_vad: False
+      asr_based_vad_threshold: 1.0
+      asr_batch_size: null
+      decoder_delay_in_sec: null
+      word_ts_anchor_offset: null
+      word_ts_anchor_pos: "start"
+      fix_word_ts_with_VAD: False
+      colored_text: False
+      print_time: True
+      break_lines: False
+
+    ctc_decoder_parameters:
+      pretrained_language_model: null
+      beam_width: 8                                   # Reduced from 32 to save memory during decoding
+      alpha: 0.5
+      beta: 2.5
+
+    realigning_lm_parameters:
+      arpa_language_model: null
+      min_number_of_words: 3
+      max_number_of_words: 10
+      logprob_diff_threshold: 1.2

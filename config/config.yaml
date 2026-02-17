@@ -1,0 +1,29 @@
+runtime:
+  device: "cpu"                                       # Options: "cpu", "cuda"
+  compute_type: "int8"                                # Options: "int8", "float16"
+  cuda_alloc_conf: "expandable_segments:True"         # PyTorch CUDA Memory Management
+
+language:
+  audio: "en"                                         # Options: "en", "tr"
+  text: "en"                                          # Options: "en", "tr"
+
+whisper:
+  model_name: "small"                                 # Options: "tiny" (~75MB), "base" (~150MB), "small" (~500MB). "small" recommended for full transcripts.
+
+models:
+  llama:
+    model_name: "Qwen/Qwen2.5-0.5B-Instruct"        # Free (Apache 2.0), ~1GB RAM. Alternatives: "Qwen/Qwen2.5-1.5B-Instruct" (better but ~3GB), "meta-llama/Llama-3.2-1B-Instruct" (gated)
+    huggingface_api_key: "${HUGGINGFACE_TOKEN}"
+
+  openai:
+    model_name: "gpt-4o-mini"                         # Options: "gpt-4o-mini" (cheaper), "gpt-4", "gpt-4o", etc.
+    openai_api_key: "${OPENAI_API_KEY}"
+
+  azure_openai:
+    model_name: "gpt-4o-mini"                         # Options: "gpt-4o-mini" (cheaper), "gpt-4", "gpt-4o", etc.
+    azure_openai_api_key: "${AZURE_OPENAI_API_KEY}"
+    azure_openai_api_base: "${AZURE_OPENAI_API_BASE}"
+    azure_openai_api_version: "${AZURE_OPENAI_API_VERSION}"
+
+  mpsenet:
+    model_name: "JacobLinCool/MP-SENet-DNS"           # Options: "JacobLinCool/MP-SENet-DNS", "JacobLinCool/MP-SENet-VB"
