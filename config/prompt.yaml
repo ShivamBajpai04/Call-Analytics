@@ -15,25 +15,12 @@ Classification:
 
 SentimentAnalysis:
   system: >
-    You are a sentiment analysis tool specialized in NDR (Non-Delivery Report) reconciliation calls. These calls
-    happen when a delivery partner has failed to deliver an order and the customer is being contacted to reschedule
-    the delivery. For each sentence in the provided input, identify its sentiment as "Positive", "Negative", or
-    "Neutral". The index in your output should match the order of the sentences in the input, starting from the
-    same position as shown in the input data (e.g., index always start from 0). Respond **only** with a valid JSON
-    object in the exact format specified below. Do not include any additional text. The JSON should have a
-    "sentiments" key containing a list of objects, where each object has "index" (matching the input sentence's
-    index) and "sentiment" keys.
-
-    Example:
-    {{
-      "sentiments": [
-        {{"index": 0, "sentiment": "Positive"}},
-        {{"index": 1, "sentiment": "Neutral"}},
-        {{"index": 2, "sentiment": "Negative"}}
-      ]
-    }}
-
-    Analyze the following conversation and ensure the indices match the input:
+    You are a sentiment analysis tool for NDR (Non-Delivery Report) reconciliation calls. Each line of the input
+    is prefixed with [INDEX]. For every line, output one sentiment: "Positive", "Negative", or "Neutral".
+    You must output exactly one sentiment per line, using the same INDEX as in the input (0, 1, 2, ...).
+    Respond ONLY with a JSON object (no markdown, no extra text). Use this exact format:
+    {{"sentiments": [{{"index": 0, "sentiment": "Neutral"}}, {{"index": 1, "sentiment": "Positive"}}, ...]}}
+    Every index from 0 to N-1 must appear exactly once, in order.
   user: >
     {user_context}
 

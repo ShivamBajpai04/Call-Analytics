@@ -37,47 +37,55 @@ class Annotator:
 
     def add_sentiment(
             self,
-            sentiment_results: Annotated[Dict[str, Any], "Sentiment analysis results"]
+            sentiment_results: Annotated[Any, "Sentiment analysis results: dict with 'sentiments' key or list of {index, sentiment}"]
     ):
         """
-        Adds sentiment data to the SSM.
-
-        Parameters
-        ----------
-        sentiment_results : dict
-            A dictionary containing sentiment analysis results, including
-            a "sentiments" key with a list of sentiment dictionaries.
-
-        Examples
-        --------
-        >>> annotator = Annotator([{"text": "example"}])
-        >>> results = {"sentiments": [{"index": 0, "sentiment": "Positive"}]}
-        >>> annotator.add_sentiment(sentiment_results)
+        Adds sentiment data to the SSM. Accepts either {"sentiments": [...]} or a raw list.
+        Handles out-of-range indices by applying in-range ones; if all indices are wrong,
+        assigns by position (first item -> index 0, etc.).
         """
-        if not sentiment_results or "sentiments" not in sentiment_results:
+        # Normalize: accept raw list (LLM sometimes returns array instead of object)
+        if isinstance(sentiment_results, list):
+            sentiments_list = sentiment_results
+        elif sentiment_results and isinstance(sentiment_results, dict) and "sentiments" in sentiment_results:
+            sentiments_list = sentiment_results["sentiments"]
+        else:
             print("Warning: 'sentiments' key is missing in sentiment_results. Defaulting to Neutral.")
             for item in self.ssm:
                 item.setdefault("sentiment", "Neutral")
             return
 
-        if len(sentiment_results["sentiments"]) != len(self.ssm):
-            print(f"Mismatch: SSM Length = {len(self.ssm)}, "
-                  f"Sentiments Length = {len(sentiment_results['sentiments'])}")
-            print("Adjusting to match lengths...")
+        if not isinstance(sentiments_list, list):
+            for item in self.ssm:
+                item.setdefault("sentiment", "Neutral")
+            return
 
-        if len(sentiment_results["sentiments"]) < len(self.ssm):
-            for idx in range(len(sentiment_results["sentiments"]), len(self.ssm)):
-                sentiment_results["sentiments"].append({"index": idx, "sentiment": "Neutral"})
+        n = len(self.ssm)
+        # Ensure each item has "index" and "sentiment"
+        valid_entries = []
+        for entry in sentiments_list:
+            if not isinstance(entry, dict) or "sentiment" not in entry:
+                continue
+            idx = entry.get("index", -1)
+            sent = entry.get("sentiment", "Neutral")
+            if sent not in ("Positive", "Negative", "Neutral"):
+                sent = "Neutral"
+            valid_entries.append((idx, sent))
 
-        elif len(sentiment_results["sentiments"]) > len(self.ssm):
-            sentiment_results["sentiments"] = sentiment_results["sentiments"][:len(self.ssm)]
+        # Check if any index is in range; if not, assign by position
+        any_in_range = any(0 <= idx < n for idx, _ in valid_entries)
+        if not any_in_range and len(valid_entries) <= n:
+            # LLM returned wrong indices (e.g. word indices); use order: first -> 0, second -> 1, ...
+            valid_entries = [(i, sent) for i, (_, sent) in enumerate(valid_entries)]
 
-        for sentiment_data in sentiment_results["sentiments"]:
-            idx = sentiment_data["index"]
-            if idx < len(self.ssm):
-                self.ssm[idx]["sentiment"] = sentiment_data["sentiment"]
-            else:
-                print(f"Skipping sentiment data at index {idx}, out of range.")
+        for idx, sent in valid_entries:
+            if 0 <= idx < n:
+                self.ssm[idx]["sentiment"] = sent
+            elif idx >= n:
+                pass  # skip out-of-range
+
+        for item in self.ssm:
+            item.setdefault("sentiment", "Neutral")
 
     def add_profanity(
             self,
