@@ -2,7 +2,7 @@
 import re
 import json
 import asyncio
-from typing import Annotated, Optional, Dict, Any, List
+from typing import Annotated, Optional, Dict, Any, List, Union
 
 # Related third-party imports
 import yaml
@@ -86,20 +86,38 @@ class LLMOrchestrator:
     @staticmethod
     def extract_json(
             response: Annotated[str, "The response string to extract JSON from"]
-    ) -> Annotated[Optional[Dict[str, Any]], "Extracted JSON as a dictionary or None if not found"]:
+    ) -> Annotated[Optional[Union[Dict[str, Any], List[Any]]], "Extracted JSON as dict/list or None"]:
         """
-        Extracts the last valid JSON object from a given response string.
-
-        Parameters
-        ----------
-        response : str
-            The response string to extract JSON from.
-
-        Returns
-        -------
-        Optional[Dict[str, Any]]
-            The last valid JSON dictionary if successfully extracted and parsed, otherwise None.
+        Extracts JSON from a response string. Tries full response first (handles arrays),
+        then falls back to finding JSON objects.
         """
+        stripped = response.strip()
+        # Try to strip markdown code block
+        if stripped.startswith("```"):
+            stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+            stripped = re.sub(r"\s*```$", "", stripped)
+        try:
+            parsed = json.loads(stripped)
+            return parsed
+        except json.JSONDecodeError:
+            pass
+        # Try to parse first complete JSON value (object or array)
+        for start_char, end_char in [("[", "]"), ("{", "}")]:
+            start = stripped.find(start_char)
+            if start == -1:
+                continue
+            depth = 0
+            for i in range(start, len(stripped)):
+                if stripped[i] == start_char:
+                    depth += 1
+                elif stripped[i] == end_char:
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(stripped[start : i + 1])
+                        except json.JSONDecodeError:
+                            break
+        # Fallback: last JSON object only (original behavior)
         json_pattern = r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}'
         matches = re.findall(json_pattern, response)
         for match in reversed(matches):
@@ -127,7 +145,15 @@ class LLMOrchestrator:
         if not system_prompt_template or not user_prompt_template:
             return {"error": f"Prompts for '{prompt_name}' are incomplete."}
 
-        formatted_user_input = Formatter.format_ssm_as_dialogue(user_input)
+        # For SentimentAnalysis, send numbered sentences so the LLM returns correct indices (0, 1, ...)
+        if prompt_name == "SentimentAnalysis" and isinstance(user_input, list):
+            lines = [
+                f"[{i}] {item.get('speaker', '')}: {item.get('text', '').strip()}"
+                for i, item in enumerate(user_input)
+            ]
+            formatted_user_input = "\n".join(lines)
+        else:
+            formatted_user_input = Formatter.format_ssm_as_dialogue(user_input)
 
         if system_input:
             system_prompt = system_prompt_template.format(system_context=system_input)
@@ -148,11 +174,14 @@ class LLMOrchestrator:
         )
         print(response)
 
-        dict_obj = self.extract_json(response)
-        if dict_obj:
-            return dict_obj
-        else:
+        parsed = self.extract_json(response)
+        if parsed is None:
             return {"error": "No valid JSON object found in the response."}
+        # Normalize SentimentAnalysis: LLM often returns a raw array instead of {"sentiments": [...]}
+        if prompt_name == "SentimentAnalysis" and isinstance(parsed, list) and len(parsed) > 0:
+            if isinstance(parsed[0], dict) and "sentiment" in parsed[0]:
+                return {"sentiments": parsed}
+        return parsed
 
 
 class LLMResultHandler:
